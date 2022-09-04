@@ -49,5 +49,6 @@ stdout() {
 }
 
 stdout  1 t01-rqueue "rqueueTest"
+stdout  2 t02-btree2 "btree2Test"
 
 report
