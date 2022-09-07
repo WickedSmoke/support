@@ -32,8 +32,8 @@ typedef struct {
     uint16_t flags;
     uint8_t  countL;
     uint8_t  countH;
-    uint16_t indexL;    // Index into split or data array.
-    uint16_t indexH;    // Index into split or data array.
+    uint16_t indexL;    // Index into split or leaves array.
+    uint16_t indexH;    // Index into split or leaves array.
     bt2dim_t center;
 }
 BTree2Split;
@@ -47,29 +47,31 @@ BTree2Box;
 
 typedef struct {
     uint16_t splitCount;
-    uint16_t boxCount;
+    uint16_t leavesSize;
     BTree2Split split;      // split[splitCount]
+    // uint16_t leaves[leavesSize];
     // BTree2Box boxes[boxCount];
 }
 BTree2;
 
 #define BTREE2_SPLIT(bt)    &bt->split
-#define BTREE2_BOXES(bt)    ((BTree2Box*) (&bt->split + bt->splitCount))
+#define BTREE2_LEAVES(bt)   ((uint16_t*) (&bt->split + bt->splitCount))
 #define BTREE2_BYTES(bt) \
-    (4 + sizeof(BTree2Split)*bt->splitCount + sizeof(BTree2Box)*bt->boxCount)
+    (4 + sizeof(BTree2Split)*bt->splitCount + sizeof(uint16_t)*bt->leavesSize)
 
 typedef struct {
     const BTree2Box* inbox;
-    BTree2Box* boxes;
+    uint16_t* leaves;           // Box index array for each leaf.
     BTree2Split* split;
     int inCount;
-    int boxCount;
+    int leavesSize;
     int splitCount;
 }
 BTree2Gen;
 
 BTree2* btree2_generate(BTree2Gen*, const BTree2Box* inbox, int boxCount);
-const BTree2Box* btree2_pick(const BTree2*, bt2dim_t x, bt2dim_t y);
+const BTree2Box* btree2_pick(const BTree2*, const BTree2Box*,
+                             bt2dim_t x, bt2dim_t y);
 
 
 #ifndef BTREE2_PICK_ONLY
@@ -128,22 +130,22 @@ static int btree2_partition(BTree2Gen* gen, const BTree2Box* bound,
         inCount = inp - inside;
         if (inCount <= BTREE2_LEAF_SIZE) {
             // Leaf node reached.
-            int bi = gen->boxCount;
+            int li = gen->leavesSize;
 
             if (part) {
                 sp.flags |= BTREE2_H_LEAF;
                 sp.countH = inCount;
-                sp.indexH = bi;
+                sp.indexH = li;
             } else {
                 sp.flags |= BTREE2_L_LEAF;
                 sp.countL = inCount;
-                sp.indexL = bi;
+                sp.indexL = li;
             }
 
             for (i = 0; i < inCount; ++i)
-                gen->boxes[bi++] = gen->inbox[ inside[i] ];
+                gen->leaves[li++] = inside[i];
 
-            gen->boxCount = bi;
+            gen->leavesSize = li;
         } else {
             // Sub-partition.
             int index = btree2_partition(gen, sub, inside, inCount);
@@ -186,10 +188,10 @@ BTree2* btree2_generate(BTree2Gen* gen, const BTree2Box* inbox, int boxCount)
     }
 
     gen->inbox = inbox;
-    gen->boxes = ALLOC(BTree2Box, boxCount * 2);
+    gen->leaves = ALLOC(uint16_t, boxCount * 2);
     gen->split = ALLOC(BTree2Split, boxCount / 2);
     gen->inCount = boxCount;
-    gen->boxCount = 0;
+    gen->leavesSize = 0;
     gen->splitCount = 0;
 
     inside = ALLOC(uint16_t, boxCount);
@@ -198,31 +200,32 @@ BTree2* btree2_generate(BTree2Gen* gen, const BTree2Box* inbox, int boxCount)
     btree2_partition(gen, &bound, inside, boxCount);
     free(inside);
 
-    assert(gen->boxCount <= boxCount * 2);
+    assert(gen->leavesSize <= boxCount * 2);
     assert(gen->splitCount <= boxCount / 2);
 
     // Transfer generator buffers to a minimally sized, single chunk of memory.
     {
     size_t sizeSpl = sizeof(BTree2Split) * gen->splitCount;
-    size_t sizeBox = sizeof(BTree2Box)   * gen->boxCount;
-    hdr = (BTree2*) malloc(4 + sizeSpl + sizeBox);
+    size_t sizeLvs = sizeof(uint16_t)    * gen->leavesSize;
+    hdr = (BTree2*) malloc(4 + sizeSpl + sizeLvs);
     hdr->splitCount = gen->splitCount;
-    hdr->boxCount   = gen->boxCount;
+    hdr->leavesSize = gen->leavesSize;
     memcpy(BTREE2_SPLIT(hdr), gen->split, sizeSpl);
-    memcpy(BTREE2_BOXES(hdr), gen->boxes, sizeBox);
+    memcpy(BTREE2_LEAVES(hdr), gen->leaves, sizeLvs);
     }
 
-    free(gen->boxes);
+    free(gen->leaves);
     free(gen->split);
     return hdr;
 }
 #endif
 
-const BTree2Box* btree2_pick(const BTree2* tree, bt2dim_t x, bt2dim_t y)
+const BTree2Box* btree2_pick(const BTree2* tree, const BTree2Box* boxes,
+                             bt2dim_t x, bt2dim_t y)
 {
     const BTree2Split* split = BTREE2_SPLIT(tree);
     const BTree2Split* sp = split;
-    int part, boxIndex, bc;
+    int part, leafIndex, bc;
 
     while (1) {
         part = 0;
@@ -237,14 +240,14 @@ const BTree2Box* btree2_pick(const BTree2* tree, bt2dim_t x, bt2dim_t y)
         if (part) {
             if (sp->flags & BTREE2_H_LEAF) {
                 bc = sp->countH;
-                boxIndex = sp->indexH;
+                leafIndex = sp->indexH;
                 break;
             }
             sp = split + sp->indexH;
         } else {
             if (sp->flags & BTREE2_L_LEAF) {
                 bc = sp->countL;
-                boxIndex = sp->indexL;
+                leafIndex = sp->indexL;
                 break;
             }
             sp = split + sp->indexL;
@@ -252,9 +255,10 @@ const BTree2Box* btree2_pick(const BTree2* tree, bt2dim_t x, bt2dim_t y)
     }
 
     {
-    const BTree2Box* box = BTREE2_BOXES(tree) + boxIndex;
-    const BTree2Box* end = box + bc;
-    for (; box != end; ++box) {
+    const uint16_t* li  = BTREE2_LEAVES(tree) + leafIndex;
+    const uint16_t* end = li + bc;
+    for (; li != end; ++li) {
+        const BTree2Box* box = boxes + *li;
         if (x >= box->x && x < box->x2 &&
             y >= box->y && y < box->y2)
             return box;

@@ -17,7 +17,7 @@ BTree2Box testBox[10] = {
 
 void pick(const BTree2* bt, int x, int y)
 {
-    const BTree2Box* hit = btree2_pick(bt, x, y);
+    const BTree2Box* hit = btree2_pick(bt, testBox, x, y);
     printf("    %2d,%2d %c", x, y, hit ? hit->data : '-');
 }
 
