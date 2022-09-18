@@ -92,10 +92,10 @@ void rqueue_free(RQueue* rb)
 #endif
 
 /*
- * TYPE* rqueue<TYPE>_append(RQueue*)
+ * TYPE* rqueue_append_<TYPE>(RQueue*)
  * Return pointer to a value in the buffer which the caller must initialize.
  *
- * TYPE* rqueue<TYPE>_removeHead(RQueue*)
+ * TYPE* rqueue_removeHead_<TYPE>(RQueue*)
  * Return pointer to the previous head value.
  */
 
