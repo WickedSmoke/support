@@ -50,5 +50,6 @@ stdout() {
 
 stdout  1 t01-rqueue "rqueueTest"
 stdout  2 t02-btree2 "btree2Test"
+stdout  3 t03-array_isort "array_isortTest"
 
 report

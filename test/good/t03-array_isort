@@ -1,0 +1,7 @@
+used: 7 first: (1 velcro) last: (1 brush)
+sorted
+ (1 brush) (1 frozen) (1 sherpa) (1 velcro) (2 launch) (2 zebra) (3 apple)
+sort two
+ (1 sherpa) (1 velcro)
+sort one
+ (1 sherpa)

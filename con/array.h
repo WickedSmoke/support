@@ -1,5 +1,5 @@
 /*
-  C Resizable Array Template
+  C Resizable Array Template (version 1.1)
   Written and dedicated to the public domain in 2023 by Karl Robillard.
 
   Example Usage:
@@ -55,4 +55,33 @@ void PRE ## _remove(AT* ap, size_t pos, size_t count) { \
         ap->used -= count; \
     } else \
         ap->used = pos; \
+}
+
+#define ARRAY_ISORT(PRE, ET) \
+void PRE ## _isort(ET* first, ET* end, \
+    int (*compare_less)(const ET*,const ET*,void*), void* compare_ctx) { \
+    ET tmp, *it, *min, *prev; \
+    if (first == end) return; \
+    it = first + 1; \
+    if (it == end) return; \
+    /* Find minimum element and swap it with the first. */ \
+    for (min = first; it != end; ++it) { \
+        if (compare_less(it, min, compare_ctx)) \
+            min = it; \
+    } \
+    if (min != first) { \
+        tmp = *first; \
+        *first = *min; \
+        *min = tmp; \
+    } \
+    /* Do reverse passes over elements, moving start up each time. */ \
+    for (it = first + 2; it != end; ++it) { \
+        tmp = *it; \
+        prev = it - 1; \
+        while (compare_less(&tmp, prev, compare_ctx)) { \
+            prev[1] = *prev; \
+            if (--prev == first) break; \
+        } \
+        prev[1] = tmp; \
+    } \
 }
