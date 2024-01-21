@@ -93,19 +93,19 @@ enum HIDUsageKey {
 	HKEY_KP_Subtract,	// -
 	HKEY_KP_Add,		// +
 	HKEY_KP_Enter,
-	HKEY_KP_End,		// 1
-	HKEY_KP_Down,		// 2
-	HKEY_KP_PageDown,	// 3
-	HKEY_KP_Left,		// 4
+	HKEY_KP_1,		// End
+	HKEY_KP_2,		// Down
+	HKEY_KP_3,		// PageDown
+	HKEY_KP_4,		// LeftArrow
 	HKEY_KP_5,
-	HKEY_KP_RightArrow,	// 6
-	HKEY_KP_Home,		// 7
-	HKEY_KP_UpArrow,	// 8
-	HKEY_KP_PageUp,		// 9
-	HKEY_KP_Insert,		// 0
-	HKEY_KP_Delete,		// ., 0x63
-	HKEY_LS,			// <>, \| (Non-US, near LeftShift key)
-	HKEY_AppMenu,		// (next to RWin key)
+	HKEY_KP_6,		// RightArrow
+	HKEY_KP_7,		// Home
+	HKEY_KP_8,		// UpArrow
+	HKEY_KP_9,		// PageUp
+	HKEY_KP_0,		// Insert
+	HKEY_KP_Delete,	// ., 0x63
+	HKEY_LS,		// <>, \| (Non-US, near LeftShift key)
+	HKEY_AppMenu,	// (next to RWin key)
 	HKEY_Power,
 	HKEY_KP_Equal,	// 0x67
 	HKEY_F13,		// 0x68
