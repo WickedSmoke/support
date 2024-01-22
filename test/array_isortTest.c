@@ -12,7 +12,7 @@ typedef struct {
 } ItemArray;
 
 #include "array.h"
-ARRAY_IMP(items, ItemArray, Item)
+ARRAY_APPEND(items, ItemArray, Item)
 ARRAY_ISORT(items, Item)
 
 static const Item testData[7] = {
@@ -50,7 +50,7 @@ int main(int argc, char** argv)
     (void) argc;
     (void) argv;
 
-    items_init(&arr);
+    array_initr(arr);
     items_append(&arr, tcount);
     for (i = 0; i < tcount; ++i)
         arr.data[i] = testData[i];
@@ -76,6 +76,6 @@ int main(int argc, char** argv)
     items_isort(arr.data, arr.data + arr.used, item_less, NULL);
     print_all(&arr);
 
-    items_free(&arr);
+    array_freer(arr);
     return 0;
 }

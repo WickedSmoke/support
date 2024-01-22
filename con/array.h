@@ -1,5 +1,5 @@
 /*
-  C Resizable Array Template (version 1.1)
+  C Resizable Array Template (version 1.2)
   Written and dedicated to the public domain in 2023 by Karl Robillard.
 
   Example Usage:
@@ -10,22 +10,24 @@
     };
 
     #include "array.h"
-    ARRAY_IMP(myarr, MyArrary, MyArrayElement)
+    ARRAY_APPEND(myarr, MyArray, MyArrayElement)
 */
 
 #include <assert.h>
 #include <stdlib.h>
 
-#define ARRAY_IMP(PRE, AT, ET) \
-void PRE ## _init(AT* ap) { \
+#define array_init(ap) \
     ap->data = NULL; \
-    ap->used = ap->avail = 0; \
-} \
-void PRE ## _free(AT* ap) { \
-    free(ap->data); \
-    ap->data = NULL; \
-    ap->used = ap->avail = 0; \
-} \
+    ap->used = ap->avail = 0
+
+#define array_initr(arr) \
+    arr.data = NULL; \
+    arr.used = arr.avail = 0
+
+#define array_free(ap) free((ap)->data)
+#define array_freer(arr) free(arr.data)
+
+#define ARRAY_APPEND(PRE, AT, ET) \
 void PRE ## _reserve(AT* ap, size_t len) { \
     if (len > ap->avail) { \
         ap->avail *= 2; \
@@ -45,7 +47,7 @@ ET* PRE ## _append(AT* ap, size_t count) { \
     return elem; \
 }
 
-#define ARRAY_REM(PRE, AT, ET) \
+#define ARRAY_REMOVE(PRE, AT, ET) \
 void PRE ## _remove(AT* ap, size_t pos, size_t count) { \
     if (pos >= ap->used) \
         return; \
