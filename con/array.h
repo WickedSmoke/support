@@ -1,5 +1,5 @@
 /*
-  C Resizable Array Template (version 1.2)
+  C Resizable Array Template (version 1.3)
   Written and dedicated to the public domain in 2023 by Karl Robillard.
 
   Example Usage:
@@ -57,6 +57,17 @@ void PRE ## _remove(AT* ap, size_t pos, size_t count) { \
         ap->used -= count; \
     } else \
         ap->used = pos; \
+}
+
+#define ARRAY_FIND(PRE, AT, ET) \
+int PRE ## _find(const AT* ap, ET val) { \
+    const ET* it = ap->data; \
+    const ET* end = it + ap->used; \
+    for (; it != end; ++it) { \
+        if (*it == val) \
+            return it - ap->data; \
+    } \
+    return -1; \
 }
 
 #define ARRAY_ISORT(PRE, ET) \
