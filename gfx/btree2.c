@@ -1,5 +1,5 @@
 /*
- * btree2.c
+ * btree2.c (version 1.1)
  * Written and dedicated to the public domain in 2022 by Karl Robillard.
  *
  * Generate a static binary space partition for 2D, axis aligned boxes.
@@ -95,7 +95,9 @@ static int btree2_partition(BTree2Gen* gen, const BTree2Box* bound,
     subL = *bound;
     subH = *bound;
 
-    // Using a simple bisect partitioning scheme.
+    // Using a simple bisect partitioning scheme based on the enclosing
+    // boundary dimensions.  It would probably be better to pick the axis
+    // based on the distribution of box centers instead.
 
     if (dx > dy) {
         sp.flags  = BTREE2_AXIS_X;
@@ -188,8 +190,8 @@ BTree2* btree2_generate(BTree2Gen* gen, const BTree2Box* inbox, int boxCount)
     }
 
     gen->inbox = inbox;
-    gen->leaves = ALLOC(uint16_t, boxCount * 2);
-    gen->split = ALLOC(BTree2Split, boxCount / 2);
+    gen->leaves = ALLOC(uint16_t, boxCount * 4);
+    gen->split = ALLOC(BTree2Split, boxCount * 2);
     gen->inCount = boxCount;
     gen->leavesSize = 0;
     gen->splitCount = 0;
@@ -200,8 +202,8 @@ BTree2* btree2_generate(BTree2Gen* gen, const BTree2Box* inbox, int boxCount)
     btree2_partition(gen, &bound, inside, boxCount);
     free(inside);
 
-    assert(gen->leavesSize <= boxCount * 2);
-    assert(gen->splitCount <= boxCount / 2);
+    assert(gen->leavesSize <= boxCount * 4);
+    assert(gen->splitCount <= boxCount * 2);
 
     // Transfer generator buffers to a minimally sized, single chunk of memory.
     {
