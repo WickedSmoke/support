@@ -1,5 +1,5 @@
 /*
- * btree2.c (version 1.1)
+ * btree2.c (version 1.2)
  * Written and dedicated to the public domain in 2022 by Karl Robillard.
  *
  * Generate a static binary space partition for 2D, axis aligned boxes.
@@ -10,6 +10,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+//#define BTREE2_REPORT
+#define BTREE2_BISECT_CENTER
+
 #ifndef BTREE2_DIM
 #define BTREE2_DIM  uint16_t
 #endif
@@ -17,7 +20,10 @@
 #define BTREE2_DATA int
 #endif
 #ifndef BTREE2_LEAF_SIZE
-#define BTREE2_LEAF_SIZE    4
+#define BTREE2_LEAF_SIZE    6
+#endif
+#ifndef BTREE2_EDGE_EPSILON
+#define BTREE2_EDGE_EPSILON 2
 #endif
 
 typedef BTREE2_DIM  bt2dim_t;
@@ -34,9 +40,20 @@ typedef struct {
     uint8_t  countH;
     uint16_t indexL;    // Index into split or leaves array.
     uint16_t indexH;    // Index into split or leaves array.
-    bt2dim_t center;
+    bt2dim_t splitPos;
 }
 BTree2Split;
+
+typedef struct {
+    bt2dim_t  x, y;
+}
+BTree2Point;
+
+typedef struct {
+    bt2dim_t  x, y;     // Minimum
+    bt2dim_t  x2, y2;   // Maxiumum (x + width, y + height)
+}
+BTree2Bound;
 
 typedef struct {
     bt2dim_t  x, y;     // Minimum
@@ -61,56 +78,141 @@ BTree2;
 
 typedef struct {
     const BTree2Box* inbox;
+    BTree2Point* center;        // Center point for each inbox.
     uint16_t* leaves;           // Box index array for each leaf.
     BTree2Split* split;
-    int inCount;
     int leavesSize;
     int splitCount;
+#ifdef BTREE2_REPORT
+    int depth;
+#endif
 }
 BTree2Gen;
-
-BTree2* btree2_generate(BTree2Gen*, const BTree2Box* inbox, int boxCount);
-const BTree2Box* btree2_pick(const BTree2*, const BTree2Box*,
-                             bt2dim_t x, bt2dim_t y);
 
 
 #ifndef BTREE2_PICK_ONLY
 #define ALLOC(T,N)  (T*) malloc(sizeof(T) * N)
 
-static int btree2_intersects(const BTree2Box* a, const BTree2Box* b)
+#ifdef BTREE2_BISECT_CENTER
+static void btree2_centersBound(BTree2Bound* bnd, const BTree2Point* center,
+                                const uint16_t* list, int listSize)
+{
+    bt2dim_t p;
+    const BTree2Point* cpoint = center + list[0];
+    bnd->x = bnd->x2 = cpoint->x;
+    bnd->y = bnd->y2 = cpoint->y;
+
+    for (int i = 1; i < listSize; ++i) {
+        cpoint = center + list[i];
+
+        p = cpoint->x;
+        if (p < bnd->x)
+            bnd->x = p;
+        else if (p > bnd->x2)
+            bnd->x2 = p;
+
+        p = cpoint->y;
+        if (p < bnd->y)
+            bnd->y = p;
+        else if (p > bnd->y2)
+            bnd->y2 = p;
+    }
+}
+#endif
+
+bt2dim_t btree2_splitEdge(const BTree2Box* inbox, const uint16_t* list, int listSize,
+                          int xyOff, bt2dim_t boundL, bt2dim_t boundH)
+{
+    bt2dim_t curEdge;
+    bt2dim_t mid = (boundL + boundH) / 2;
+    bt2dim_t edge = mid;
+    int32_t edgeDist = 0x7fffffff;
+    int32_t d;
+
+    for (int i = 0; i < listSize; ++i) {
+        const BTree2Box* box = inbox + list[i];
+        const bt2dim_t* v0 = &box->x + xyOff;
+        curEdge = v0[0] - 1;    // box x or y
+        if (curEdge > boundL) {
+            d = mid - curEdge;
+            if (d < 0)
+                d = -d;
+            if (d < edgeDist) {
+                edgeDist = d;
+                edge = curEdge;
+                if (d <= BTREE2_EDGE_EPSILON)
+                    break;
+            }
+        }
+
+        curEdge = v0[2];    // box x2 or y2
+        if (curEdge < boundH) {
+            d = mid - curEdge;
+            if (d < 0)
+                d = -d;
+            if (d < edgeDist) {
+                edgeDist = d;
+                edge = curEdge;
+                if (d <= BTREE2_EDGE_EPSILON)
+                    break;
+            }
+        }
+    }
+    return edge;
+}
+
+static int btree2_intersects(const BTree2Bound* a, const BTree2Box* b)
 {
     return (a->x < b->x2 && a->x2 > b->x &&
             a->y < b->y2 && a->y2 > b->y);
 }
 
-static int btree2_partition(BTree2Gen* gen, const BTree2Box* bound,
+static int btree2_partition(BTree2Gen* gen, const BTree2Bound* bound,
                             const uint16_t* list, int listSize)
 {
-    BTree2Box subL, subH;
-    int dx = bound->x2 - bound->x;
-    int dy = bound->y2 - bound->y;
-    int si = gen->splitCount++;
+    BTree2Bound subL, subH;
     BTree2Split sp;
+    int dx, dy;
+    int si = gen->splitCount++;
 
     subL = *bound;
     subH = *bound;
 
+#ifdef BTREE2_BISECT_CENTER
+    // Select bisect axis based on the distribution of box centers.
+    {
+    BTree2Bound cbound;
+    btree2_centersBound(&cbound, gen->center, list, listSize);
+    dx = cbound.x2 - cbound.x;
+    dy = cbound.y2 - cbound.y;
+    }
+#else
     // Using a simple bisect partitioning scheme based on the enclosing
-    // boundary dimensions.  It would probably be better to pick the axis
-    // based on the distribution of box centers instead.
+    // boundary dimensions.
+
+    dx = bound->x2 - bound->x;
+    dy = bound->y2 - bound->y;
+#endif
+
+#ifdef BTREE2_REPORT
+    printf("BT2 partition %d (%d,%d %d,%d) %c\n",
+            gen->depth, bound->x, bound->y, bound->x2, bound->y2,
+            dx > dy ? 'X':'Y');
+    ++gen->depth;
+#endif
 
     if (dx > dy) {
         sp.flags  = BTREE2_AXIS_X;
-        sp.center = bound->x + dx/2;
+        sp.splitPos = btree2_splitEdge(gen->inbox, list, listSize, 0, bound->x, bound->x2);
 
-        subL.x2 = sp.center;
-        subH.x  = sp.center;
+        subL.x2 = sp.splitPos;
+        subH.x  = sp.splitPos;
     } else {
         sp.flags  = 0;
-        sp.center = bound->y + dy/2;
+        sp.splitPos = btree2_splitEdge(gen->inbox, list, listSize, 1, bound->y, bound->y2);
 
-        subL.y2 = sp.center;
-        subH.y  = sp.center;
+        subL.y2 = sp.splitPos;
+        subH.y  = sp.splitPos;
     }
 
     sp.countL = sp.countH = 0;
@@ -118,7 +220,7 @@ static int btree2_partition(BTree2Gen* gen, const BTree2Box* bound,
 
     {
     int part, i, inCount;
-    BTree2Box* sub;
+    BTree2Bound* sub;
     uint16_t* inside = ALLOC(uint16_t, listSize);
     uint16_t* inp;
 
@@ -161,6 +263,10 @@ static int btree2_partition(BTree2Gen* gen, const BTree2Box* bound,
     free(inside);
     }
 
+#ifdef BTREE2_REPORT
+    --gen->depth;
+#endif
+
     gen->split[si] = sp;
     return si;
 }
@@ -170,15 +276,16 @@ static int btree2_partition(BTree2Gen* gen, const BTree2Box* bound,
  */
 BTree2* btree2_generate(BTree2Gen* gen, const BTree2Box* inbox, int boxCount)
 {
-    BTree2Box bound;
+    BTree2Bound bound;
     BTree2* hdr;
     const BTree2Box* box = inbox;
-    uint16_t* inside;
+    size_t splitMax, leavesMax, bufTotal;
     int i;
 
     // Calculate bounding box.
-    bound = *box++;
-    for (i = 1; i < boxCount; ++box, ++i) {
+    bound = *((const BTree2Bound*) box);
+    for (i = 1; i < boxCount; ++i) {
+        ++box;
         if (bound.x > box->x)
             bound.x = box->x;
         if (bound.y > box->y)
@@ -189,21 +296,51 @@ BTree2* btree2_generate(BTree2Gen* gen, const BTree2Box* inbox, int boxCount)
             bound.y2 = box->y2;
     }
 
+    splitMax  = boxCount;
+    leavesMax = boxCount * 4;
+    bufTotal = sizeof(BTree2Split) * splitMax +
+               sizeof(BTree2Point) * boxCount +
+               sizeof(uint16_t) * leavesMax +
+               sizeof(uint16_t) * boxCount;
+
+    // Pointers assigned in order of struct size to maintain natural alignment.
+    gen->split  = (BTree2Split*) malloc(bufTotal);
+    gen->center = (BTree2Point*) (gen->split + splitMax);
+    gen->leaves = (uint16_t*) (gen->center + boxCount);
+
     gen->inbox = inbox;
-    gen->leaves = ALLOC(uint16_t, boxCount * 4);
-    gen->split = ALLOC(BTree2Split, boxCount * 2);
-    gen->inCount = boxCount;
     gen->leavesSize = 0;
     gen->splitCount = 0;
+#ifdef BTREE2_REPORT
+    gen->depth = 0;
+#endif
 
-    inside = ALLOC(uint16_t, boxCount);
+    {
+    uint16_t* inside = gen->leaves + leavesMax;
+#ifdef BTREE2_BISECT_CENTER
+    BTree2Point* cpoint = gen->center;
+    box = inbox;
+    for (i = 0; i < boxCount; ++i) {
+        inside[i] = i;
+
+        cpoint->x = (box->x + box->x2) / 2;
+        cpoint->y = (box->y + box->y2) / 2;
+        ++cpoint;
+        ++box;
+    }
+#else
     for (i = 0; i < boxCount; ++i)
         inside[i] = i;
+#endif
     btree2_partition(gen, &bound, inside, boxCount);
-    free(inside);
+    }
 
-    assert(gen->leavesSize <= boxCount * 4);
-    assert(gen->splitCount <= boxCount * 2);
+#ifdef BTREE2_REPORT
+    printf("BT2 boxCount: %d leavesSize: %d splitCount: %d\n\n",
+           boxCount, gen->leavesSize, gen->splitCount);
+#endif
+    assert(gen->leavesSize <= (int) leavesMax);
+    assert(gen->splitCount <= (int) splitMax);
 
     // Transfer generator buffers to a minimally sized, single chunk of memory.
     {
@@ -216,8 +353,7 @@ BTree2* btree2_generate(BTree2Gen* gen, const BTree2Box* inbox, int boxCount)
     memcpy(BTREE2_LEAVES(hdr), gen->leaves, sizeLvs);
     }
 
-    free(gen->leaves);
-    free(gen->split);
+    free(gen->split);   // Free all working buffers.
     return hdr;
 }
 #endif
@@ -232,10 +368,10 @@ const BTree2Box* btree2_pick(const BTree2* tree, const BTree2Box* boxes,
     while (1) {
         part = 0;
         if (sp->flags & BTREE2_AXIS_X) {
-            if (x > sp->center)
+            if (x > sp->splitPos)
                 part = 1;
         } else {
-            if (y > sp->center)
+            if (y > sp->splitPos)
                 part = 1;
         }
 
