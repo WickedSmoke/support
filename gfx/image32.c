@@ -12,8 +12,9 @@
     <http://creativecommons.org/publicdomain/zero/1.0/>.
 */
 
-#include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include "image32.h"
 
 /**
