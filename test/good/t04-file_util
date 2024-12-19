@@ -1,0 +1,6 @@
+file_stem "base" -> "base"
+file_stem "base.ext" -> "base"
+file_stem "base-1.0.2.ext" -> "base-1.0.2"
+file_stem "" -> ""
+file_stem "/path/to/base.ext" -> "base"
+file_stem "C:\path\to\base.ext" -> "base"

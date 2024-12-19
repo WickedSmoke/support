@@ -12,3 +12,8 @@ exe %array_isortTest [
     include_from %../con
     sources [%array_isortTest.c]
 ]
+
+exe %file_utilTest [
+    include_from %../io
+    sources [%file_utilTest.c]
+]

@@ -41,3 +41,23 @@ void* file_readBinary(const char* path, size_t size)
     }
     return buf;
 }
+
+/*
+ * Return pointer to filename in path and set stemLen.
+ */
+const char* file_stem(const char* path, size_t* stemLen)
+{
+    const char* ext = NULL;
+    const char* cp = path;
+    while (*cp) {
+        int ch = *cp++;
+        if (ch == '/' || ch == '\\')
+            path = cp;
+        else if (ch == '.')
+            ext = cp - 1;
+    }
+    if (ext && ext >= path)
+        cp = ext;
+    *stemLen = cp - path;
+    return path;
+}
