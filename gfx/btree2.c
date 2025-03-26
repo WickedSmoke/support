@@ -1,5 +1,5 @@
 /*
- * btree2.c (version 1.2)
+ * btree2.c (version 1.2.1)
  * Written and dedicated to the public domain in 2022 by Karl Robillard.
  *
  * Generate a static binary space partition for 2D, axis aligned boxes.
@@ -14,7 +14,7 @@
 #define BTREE2_BISECT_CENTER
 
 #ifndef BTREE2_DIM
-#define BTREE2_DIM  uint16_t
+#define BTREE2_DIM  int16_t
 #endif
 #ifndef BTREE2_DATA
 #define BTREE2_DATA int
